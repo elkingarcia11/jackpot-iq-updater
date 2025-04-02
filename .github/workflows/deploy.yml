@@ -3,33 +3,50 @@ name: Deploy Cloud Function
 on:
   push:
     branches:
-      - main # or your default branch
+      - main
 
 env:
-  PROJECT_ID: jackpot-iq # replace with your project ID
-  FUNCTION_NAME: scrape-lottery
-  REGION: us-central1 # replace with your preferred region
-  GCS_BUCKET: jackpot-iq # replace with your bucket name
+  PROJECT_ID: ${{ secrets.PROJECT_ID }}
+  FUNCTION_NAME: ${{ secrets.FUNCTION_NAME }}
+  REGION: ${{ secrets.REGION }}
+  GCS_BUCKET: ${{ secrets.GCS_BUCKET }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
+    permissions:
+      contents: "read"
+      id-token: "write"
 
-      - name: Google Auth
-        uses: google-github-actions/auth@v1
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ secrets.PROJECT_ID }}
 
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
+        uses: google-github-actions/setup-gcloud@v2
 
-      - name: Submit Cloud Build
+      - name: Build and Deploy Function
         run: |
+          # Build the container
           gcloud builds submit \
-            --config=cloudbuild.yaml \
-            --substitutions=_PROJECT_ID=${{ env.PROJECT_ID }},\
-                          _FUNCTION_NAME=${{ env.FUNCTION_NAME }},\
-                          _REGION=${{ env.REGION }},\
-                          _GCS_BUCKET=${{ env.GCS_BUCKET }}
+            --config=function/Dockerfile \
+            --tag=gcr.io/${{ secrets.PROJECT_ID }}/${{ secrets.FUNCTION_NAME }} \
+            function/
+
+          # Deploy the function
+          gcloud functions deploy ${{ secrets.FUNCTION_NAME }} \
+            --gen2 \
+            --runtime=python39 \
+            --region=${{ secrets.REGION }} \
+            --source=function \
+            --trigger-http \
+            --allow-unauthenticated \
+            --set-env-vars=GCS_BUCKET=${{ secrets.GCS_BUCKET }} \
+            --docker-registry=artifact-registry \
+            --docker-repository=functions \
+            --dockerfile=Dockerfile
