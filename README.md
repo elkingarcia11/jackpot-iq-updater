@@ -1,6 +1,6 @@
 # Lottery Number Scraper
 
-A Python Cloud Function that automatically scrapes Powerball and Mega Millions lottery numbers from lottery.net and stores them in Firebase. The function runs on a schedule and only adds new draws to the database.
+A Python Cloud Function that automatically scrapes Powerball and Mega Millions lottery numbers from lottery.net and stores them in Firebase. The function runs on a schedule using Cloud Scheduler and Pub/Sub, and only adds new draws to the database.
 
 ## Features
 
@@ -76,6 +76,20 @@ gcloud builds submit \
                 _GCS_BUCKET=your-bucket-name
 ```
 
+3. Set up Cloud Scheduler with Pub/Sub:
+
+```bash
+# First create a Pub/Sub topic
+gcloud pubsub topics create lottery-scraper-trigger
+
+# Then create a Cloud Scheduler job
+gcloud scheduler jobs create pubsub lottery-scraper-scheduler \
+  --schedule="0 10 * * *" \
+  --topic=lottery-scraper-trigger \
+  --message-body="{\"scrape\": true}" \
+  --time-zone="America/New_York"
+```
+
 ### Automated Deployment with GitHub Actions
 
 1. Set up GitHub Secrets:
@@ -100,7 +114,7 @@ gcloud builds submit \
 ```
 /
 ├── function/                 # Cloud Function code
-│   ├── main.py              # Function entry point
+│   ├── main.py              # Function entry point (Pub/Sub trigger)
 │   ├── lottery_scraper.py   # Main scraping logic
 │   ├── requirements.txt     # Python dependencies
 │   └── Dockerfile          # Container configuration
