@@ -1,0 +1,35 @@
+name: Deploy Cloud Function
+
+on:
+  push:
+    branches:
+      - main # or your default branch
+
+env:
+  PROJECT_ID: jackpot-iq # replace with your project ID
+  FUNCTION_NAME: scrape-lottery
+  REGION: us-central1 # replace with your preferred region
+  GCS_BUCKET: jackpot-iq # replace with your bucket name
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Google Auth
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Submit Cloud Build
+        run: |
+          gcloud builds submit \
+            --config=cloudbuild.yaml \
+            --substitutions=_PROJECT_ID=${{ env.PROJECT_ID }},\
+                          _FUNCTION_NAME=${{ env.FUNCTION_NAME }},\
+                          _REGION=${{ env.REGION }},\
+                          _GCS_BUCKET=${{ env.GCS_BUCKET }}

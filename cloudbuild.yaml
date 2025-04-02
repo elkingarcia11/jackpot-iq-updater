@@ -1,0 +1,34 @@
+steps:
+  # Build the container image
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["build", "-t", "gcr.io/$PROJECT_ID/$FUNCTION_NAME", "./function"]
+
+  # Push the container image to Container Registry
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "gcr.io/$PROJECT_ID/$FUNCTION_NAME"]
+
+  # Deploy container image to Cloud Run
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - "functions"
+      - "deploy"
+      - "$FUNCTION_NAME"
+      - "--gen2"
+      - "--runtime=python39"
+      - "--region=$REGION"
+      - "--source=./function"
+      - "--entry-point=scrape_lottery"
+      - "--trigger-http"
+      - "--allow-unauthenticated"
+      - "--set-env-vars=GCS_BUCKET=$GCS_BUCKET"
+      - "--image=gcr.io/$PROJECT_ID/$FUNCTION_NAME"
+
+images:
+  - "gcr.io/$PROJECT_ID/$FUNCTION_NAME"
+
+substitutions:
+  _PROJECT_ID: jackpot-iq
+  _FUNCTION_NAME: scrape-lottery
+  _REGION: us-central1
+  _GCS_BUCKET: jackpot-iq

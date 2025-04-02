@@ -1,6 +1,6 @@
 # Lottery Number Scraper
 
-A Python script that automatically scrapes Powerball and Mega Millions lottery numbers from lottery.net and stores them in Firebase. The script keeps track of the latest draws and only adds new draws to the database.
+A Python Cloud Function that automatically scrapes Powerball and Mega Millions lottery numbers from lottery.net and stores them in Firebase. The function runs on a schedule and only adds new draws to the database.
 
 ## Features
 
@@ -12,15 +12,20 @@ A Python script that automatically scrapes Powerball and Mega Millions lottery n
 - Firebase integration for persistent storage
 - Secure credential management using Google Cloud Storage
 - Environment variable configuration
+- Cloud Build deployment with GitHub Actions integration
 
 ## Requirements
 
 - Python 3.6+
-- Google Cloud credentials with access to:
-  - Firebase Admin SDK
-  - Google Cloud Storage (jackpot-iq bucket)
+- Google Cloud Platform project with:
+  - Cloud Functions enabled
+  - Cloud Build enabled
+  - Cloud Scheduler enabled
+  - Firebase Admin SDK access
+  - Google Cloud Storage access
+  - Container Registry access
 
-## Installation
+## Local Development
 
 1. Clone this repository:
 
@@ -29,13 +34,20 @@ git clone <repository-url>
 cd jackpot-iq-updater
 ```
 
-2. Install required packages:
+2. Create and activate a virtual environment:
 
 ```bash
-pip install requests beautifulsoup4 firebase-admin google-cloud-storage python-dotenv
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-3. Set up environment variables:
+3. Install required packages:
+
+```bash
+pip install -r function/requirements.txt
+```
+
+4. Set up environment variables:
 
    - Copy `.env.example` to `.env`
    - Update the values in `.env` with your configuration:
@@ -43,32 +55,86 @@ pip install requests beautifulsoup4 firebase-admin google-cloud-storage python-d
      GCS_BUCKET=your-bucket-name
      ```
 
-4. Set up Google Cloud:
+## Deployment
+
+### Manual Deployment
+
+1. Set up Google Cloud:
+
    - Create a Firebase project
    - Generate a service account key (JSON file)
    - Upload the JSON file to `gs://your-bucket-name/firebase-credentials.json`
-   - Ensure your environment has proper Google Cloud credentials
 
-## Usage
-
-Run the script directly:
+2. Deploy using Cloud Build:
 
 ```bash
-python lottery_scraper.py
+gcloud builds submit \
+  --config=cloudbuild.yaml \
+  --substitutions=_PROJECT_ID=your-project-id,\
+                _FUNCTION_NAME=jackpot-iq-updater,\
+                _REGION=us-central1,\
+                _GCS_BUCKET=your-bucket-name
 ```
 
-The script will:
+### Automated Deployment with GitHub Actions
 
-1. Load environment variables from `.env`
-2. Download Firebase credentials from Google Cloud Storage
-3. Connect to Firebase and retrieve the latest draw dates
-4. Scrape new lottery draws from lottery.net
-5. Filter out draws that are already in the database
-6. Add new draws to Firebase
+1. Set up GitHub Secrets:
+
+   - Go to your repository settings
+   - Navigate to Secrets and Variables > Actions
+   - Add the following secrets:
+     - `GCP_SA_KEY`: Your Google Cloud service account key JSON
+     - `PROJECT_ID`: Your Google Cloud project ID
+     - `FUNCTION_NAME`: jackpot-iq-updater
+     - `REGION`: Your preferred region (e.g., us-central1)
+     - `GCS_BUCKET`: Your Google Cloud Storage bucket name
+
+2. Push to main branch:
+   - The GitHub Action will automatically:
+     - Build the Docker container
+     - Push to Container Registry
+     - Deploy to Cloud Functions
+
+## Project Structure
+
+```
+/
+├── function/                 # Cloud Function code
+│   ├── main.py              # Function entry point
+│   ├── lottery_scraper.py   # Main scraping logic
+│   ├── requirements.txt     # Python dependencies
+│   └── Dockerfile          # Container configuration
+├── .github/                 # GitHub Actions configuration
+│   └── workflows/
+│       └── deploy.yml      # Deployment workflow
+├── cloudbuild.yaml         # Cloud Build configuration
+└── README.md              # Project documentation
+```
+
+## Function Response
+
+The function returns a JSON response with the following structure:
+
+```json
+{
+  "status": "success",
+  "powerball_draws": number,
+  "megamillions_draws": number
+}
+```
+
+Or in case of error:
+
+```json
+{
+  "status": "error",
+  "message": "error description"
+}
+```
 
 ## Firebase Data Structure
 
-The script stores data in a `lotteryDraws` collection with the following structure:
+The function stores data in a `lotteryDraws` collection with the following structure:
 
 ```json
 {
@@ -81,7 +147,7 @@ The script stores data in a `lotteryDraws` collection with the following structu
 
 ## Error Handling
 
-The script includes comprehensive error handling for:
+The function includes comprehensive error handling for:
 
 - Network issues
 - Firebase connection problems
@@ -90,6 +156,7 @@ The script includes comprehensive error handling for:
 - Invalid dates
 - Missing or malformed data
 - Scraping errors
+- Build and deployment errors
 
 ## License
 
