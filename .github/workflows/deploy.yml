@@ -41,10 +41,9 @@ jobs:
       - name: Build and Deploy Function
         run: |
           # Build the container
-          gcloud builds submit \
-            --config=function/Dockerfile \
+          gcloud builds submit function/ \
             --tag=gcr.io/${{ secrets.PROJECT_ID }}/${{ secrets.FUNCTION_NAME }} \
-            function/
+            --dockerfile=function/Dockerfile
 
           # Deploy the function
           gcloud functions deploy ${{ secrets.FUNCTION_NAME }} \
