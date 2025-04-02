@@ -82,8 +82,8 @@ gcloud builds submit \
 
    - Go to your repository settings
    - Navigate to Secrets and Variables > Actions
-   - Add the following secrets:
-     - `GCP_SA_KEY`: Your Google Cloud service account key JSON
+   - Add the following secrets to the `jackpot-iq-updater-env` environment:
+     - `GCP_SA_KEY`: Your Google Cloud service account key JSON (from jackpot-iq-updater-sa)
      - `PROJECT_ID`: Your Google Cloud project ID
      - `FUNCTION_NAME`: jackpot-iq-updater
      - `REGION`: Your preferred region (e.g., us-central1)
