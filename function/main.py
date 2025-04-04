@@ -2,12 +2,12 @@ from lottery_scraper import scrape_lottery_data
 
 def main():
     """
-    Main function to scrape lottery data
+    Main function to scrape lottery data and save to JSON files
     """
     try:
         print("Starting lottery data scraping...")
         
-        # Execute the scraping function
+        # Execute the scraping function (stats update happens automatically)
         results = scrape_lottery_data()
         
         # Log the results
