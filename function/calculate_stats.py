@@ -224,13 +224,3 @@ def find_optimized_numbers(position_frequencies, special_freq_list, existing_com
         most_frequent.append(0)
     
     return most_frequent
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Calculate lottery statistics")
-    parser.add_argument("--mm-input", default="data/mm.json", help="Input JSON file with Mega Millions draws")
-    parser.add_argument("--pb-input", default="data/pb.json", help="Input JSON file with Powerball draws") 
-    parser.add_argument("--mm-output", default="data/mm-stats.json", help="Output file for Mega Millions statistics")
-    parser.add_argument("--pb-output", default="data/pb-stats.json", help="Output file for Powerball statistics")
-    args = parser.parse_args()
-    
-    calculate_lottery_stats(args.mm_input, args.pb_input, args.mm_output, args.pb_output) 
