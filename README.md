@@ -64,7 +64,8 @@ The application stores data in JSON files with this structure:
     "2": 30
     // Special ball numbers and frequencies
   },
-  "optimizedWinningNumber": [1, 15, 27, 39, 45, 20] // Optimized number combination
+  "optimizedByPosition": [1, 15, 27, 39, 45, 20], // Optimized by position frequency
+  "optimizedByGeneralFrequency": [16, 23, 32, 36, 39, 20] // Optimized by overall frequency
 }
 ```
 
@@ -73,7 +74,7 @@ The application stores data in JSON files with this structure:
 - `function/` - Main application code
   - `main.py` - Application entry point
   - `lottery_scraper.py` - Core scraping and data synchronization logic
-  - `calculate_stats.py` - Statistics calculation for lottery draws
+  - `calculate_stats.py` - Statistics calculation and validation for lottery draws
   - `requirements.txt` - Python dependencies
 - `data/` - Local data directory (created automatically)
   - `pb.json` - Powerball draw data
@@ -132,6 +133,34 @@ To only calculate statistics from existing data:
 ```bash
 python function/calculate_stats.py
 ```
+
+## Statistical Validation
+
+The application includes comprehensive statistical validation to ensure data integrity:
+
+1. Validates that the sum of all regular number frequencies equals totalDraws \* 5
+2. Validates that the sum of all special ball frequencies equals totalDraws
+3. Verifies that each position's frequency sum equals totalDraws
+4. Confirms that position 5 frequencies match special ball frequencies
+5. Checks that the sum of frequencies at positions 0-4 for each number equals its overall frequency
+6. Verifies that all frequency dictionaries are properly sorted in descending order
+
+## Optimized Number Generation
+
+The application generates two types of optimized number combinations:
+
+1. **Position-Based Optimization (`optimizedByPosition`)**:
+
+   - Selects the most frequent number at each position (0-4)
+   - Ensures the set of 5 regular numbers has never appeared together in previous draws
+   - Uses the most frequent special ball
+
+2. **General Frequency Optimization (`optimizedByGeneralFrequency`)**:
+   - Selects the 5 most frequent numbers across all positions
+   - Ensures this set of 5 numbers has never appeared together in previous draws
+   - Uses the most frequent special ball
+
+Both optimization strategies help generate number combinations that are statistically optimal while avoiding previously drawn combinations.
 
 ## Environment Variables
 
