@@ -4,13 +4,97 @@ from datetime import datetime
 import json
 import os
 from dotenv import load_dotenv
+from google.cloud import storage
 
 # Load environment variables
 load_dotenv()
 
+# Ensure data directory exists
+DATA_DIR = 'data'
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# GCS bucket name from environment variable or use default
+GCS_BUCKET = os.getenv('GCS_BUCKET', 'jackpot-iq')
+
+def download_from_gcs():
+    """
+    Download JSON files from Google Cloud Storage using application default credentials
+    """
+    try:
+        print(f"Downloading files from GCS bucket: {GCS_BUCKET}")
+        
+        # Initialize storage client with default credentials
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(GCS_BUCKET)
+        
+        # Files to download
+        files = ['mm.json', 'pb.json']
+        
+        for filename in files:
+            local_path = os.path.join(DATA_DIR, filename)
+            blob = bucket.blob(f"data/{filename}")
+            
+            # Check if blob exists
+            if blob.exists():
+                print(f"Downloading {filename} from GCS...")
+                blob.download_to_filename(local_path)
+                print(f"Downloaded {filename} to {local_path}")
+            else:
+                print(f"File {filename} not found in GCS bucket. Will create it if needed.")
+                # Create empty file if it doesn't exist locally
+                if not os.path.exists(local_path):
+                    with open(local_path, 'w') as f:
+                        json.dump([], f)
+                    print(f"Created empty {local_path}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error downloading files from GCS: {e}")
+        # Create empty files if download fails
+        for filename in ['mm.json', 'pb.json']:
+            local_path = os.path.join(DATA_DIR, filename)
+            if not os.path.exists(local_path):
+                with open(local_path, 'w') as f:
+                    json.dump([], f)
+                print(f"Created empty {local_path} after GCS error")
+        return False
+
+def upload_to_gcs():
+    """
+    Upload JSON files to Google Cloud Storage using application default credentials
+    """
+    try:
+        print(f"Uploading files to GCS bucket: {GCS_BUCKET}")
+        
+        # Initialize storage client with default credentials
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(GCS_BUCKET)
+        
+        # Files to upload
+        files = ['mm.json', 'pb.json', 'mm-stats.json', 'pb-stats.json']
+        
+        for filename in files:
+            local_path = os.path.join(DATA_DIR, filename)
+            
+            # Skip if file doesn't exist
+            if not os.path.exists(local_path):
+                print(f"Warning: {local_path} not found. Skipping upload.")
+                continue
+            
+            blob = bucket.blob(f"data/{filename}")
+            blob.upload_from_filename(local_path)
+            print(f"Uploaded {local_path} to GCS as data/{filename}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error uploading files to GCS: {e}")
+        return False
+
 def get_latest_draws():
     """
-    Fetch the latest draw dates from local JSON files (pb.json and mm.json)
+    Fetch the latest draw dates from local JSON files (data/pb.json and data/mm.json)
     Returns a dictionary with 'powerball' and 'mega-millions' dates
     """
     try:
@@ -19,8 +103,9 @@ def get_latest_draws():
         megamillions_date = None
         
         # Try to load Powerball draws
-        if os.path.exists('pb.json'):
-            with open('pb.json', 'r') as f:
+        pb_path = os.path.join(DATA_DIR, 'pb.json')
+        if os.path.exists(pb_path):
+            with open(pb_path, 'r') as f:
                 powerball_draws = json.load(f)
                 if powerball_draws and len(powerball_draws) > 0:
                     # Sort by date in descending order to get the latest
@@ -29,8 +114,9 @@ def get_latest_draws():
                     print(f"Latest Powerball draw: {powerball_draws[0]}")
         
         # Try to load Mega Millions draws
-        if os.path.exists('mm.json'):
-            with open('mm.json', 'r') as f:
+        mm_path = os.path.join(DATA_DIR, 'mm.json')
+        if os.path.exists(mm_path):
+            with open(mm_path, 'r') as f:
                 megamillions_draws = json.load(f)
                 if megamillions_draws and len(megamillions_draws) > 0:
                     # Sort by date in descending order to get the latest
@@ -159,10 +245,10 @@ def update_statistics():
         from calculate_stats import calculate_lottery_stats
         print("\nUpdating statistics based on new draws...")
         calculate_lottery_stats(
-            mm_input="mm.json", 
-            pb_input="pb.json",
-            mm_output="mm-stats.json", 
-            pb_output="pb-stats.json"
+            mm_input=os.path.join(DATA_DIR, "mm.json"), 
+            pb_input=os.path.join(DATA_DIR, "pb.json"),
+            mm_output=os.path.join(DATA_DIR, "mm-stats.json"), 
+            pb_output=os.path.join(DATA_DIR, "pb-stats.json")
         )
         print("Statistics updated successfully")
         return True
@@ -170,9 +256,12 @@ def update_statistics():
         print(f"Error updating statistics: {e}")
         return False
 
-def save_to_json(draws, file_path):
-    """Save draws to a JSON file"""
+def save_to_json(draws, filename):
+    """Save draws to a JSON file in the data directory"""
     try:
+        # Get full file path
+        file_path = os.path.join(DATA_DIR, filename)
+        
         # Track if new draws were added
         new_draws_added = False
         
@@ -213,6 +302,9 @@ def scrape_lottery_data():
         dict: Results with new draws
     """
     try:
+        # First, download files from GCS
+        download_from_gcs()
+        
         # Get latest draw dates from JSON files
         latest_draws = get_latest_draws()
         
@@ -252,7 +344,7 @@ def scrape_lottery_data():
                 # Save to JSON file
                 new_pb_draws = save_to_json(filtered_powerball, 'pb.json')
                 if new_pb_draws:
-                    print(f"Successfully added {len(filtered_powerball)} Powerball draws to pb.json")
+                    print(f"Successfully added {len(filtered_powerball)} Powerball draws to data/pb.json")
                     any_new_draws = True
                 else:
                     print("No new Powerball draws to save")
@@ -271,7 +363,7 @@ def scrape_lottery_data():
                 # Save to JSON file
                 new_mm_draws = save_to_json(filtered_megamillions, 'mm.json')
                 if new_mm_draws:
-                    print(f"Successfully added {len(filtered_megamillions)} Mega Millions draws to mm.json")
+                    print(f"Successfully added {len(filtered_megamillions)} Mega Millions draws to data/mm.json")
                     any_new_draws = True
                 else:
                     print("No new Mega Millions draws to save")
@@ -279,6 +371,9 @@ def scrape_lottery_data():
         # Automatically update statistics if new draws were added
         if any_new_draws:
             update_statistics()
+        
+        # Upload updated files to GCS
+        upload_to_gcs()
         
         return {
             'powerball': filtered_powerball,
@@ -288,3 +383,7 @@ def scrape_lottery_data():
     except Exception as e:
         print(f"Error in scrape_lottery_data: {e}")
         return None
+
+if __name__ == "__main__":
+    # Run the scraper (automatically updates stats if new draws are found)
+    results = scrape_lottery_data()

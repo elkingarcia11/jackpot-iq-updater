@@ -47,4 +47,8 @@ powerball_draws_2025_filtered.json
 megamillions_draws_2025_filtered
 powerball_draws_2025_filtered
 
+# Data directory
 data/
+
+# Testing
+testing/

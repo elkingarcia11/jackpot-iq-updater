@@ -2,12 +2,17 @@
 
 import json
 import argparse
+import os
 from collections import defaultdict
 
-def calculate_lottery_stats(mm_input="mm.json", 
-                           pb_input="pb.json",
-                           mm_output="mm-stats.json", 
-                           pb_output="pb-stats.json"):
+# Ensure data directory exists
+DATA_DIR = 'data'
+os.makedirs(DATA_DIR, exist_ok=True)
+
+def calculate_lottery_stats(mm_input="data/mm.json", 
+                           pb_input="data/pb.json",
+                           mm_output="data/mm-stats.json", 
+                           pb_output="data/pb-stats.json"):
     """
     Calculate comprehensive statistics for lottery draws
     
@@ -222,10 +227,10 @@ def find_optimized_numbers(position_frequencies, special_freq_list, existing_com
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Calculate lottery statistics")
-    parser.add_argument("--mm-input", default="mm.json", help="Input JSON file with Mega Millions draws")
-    parser.add_argument("--pb-input", default="pb.json", help="Input JSON file with Powerball draws") 
-    parser.add_argument("--mm-output", default="mm-stats.json", help="Output file for Mega Millions statistics")
-    parser.add_argument("--pb-output", default="pb-stats.json", help="Output file for Powerball statistics")
+    parser.add_argument("--mm-input", default="data/mm.json", help="Input JSON file with Mega Millions draws")
+    parser.add_argument("--pb-input", default="data/pb.json", help="Input JSON file with Powerball draws") 
+    parser.add_argument("--mm-output", default="data/mm-stats.json", help="Output file for Mega Millions statistics")
+    parser.add_argument("--pb-output", default="data/pb-stats.json", help="Output file for Powerball statistics")
     args = parser.parse_args()
     
     calculate_lottery_stats(args.mm_input, args.pb_input, args.mm_output, args.pb_output) 
