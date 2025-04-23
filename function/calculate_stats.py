@@ -11,90 +11,38 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 def verify_frequency_stats(stats):
     """
-    Verify that all frequency statistics are correct and consistent
+    Verify that frequency statistics are consistent
     
     Args:
-        stats (dict): Calculated statistics
-        
+        stats (dict): Statistics object to verify
+    
     Returns:
-        bool: True if all validations pass, False otherwise
+        bool: True if verification passes
     """
-    print(f"\nVerifying frequency statistics for {stats['type']}:")
-    all_validations_passed = True
+    # Get the residuals for regular numbers by position
+    position_residuals = stats['byPosition']
     
-    # Get the key data
-    total_draws = stats['totalDraws']
-    frequency = stats['frequency']
-    frequency_at_position = stats['frequencyAtPosition']
-    special_ball_frequency = stats['specialBallFrequency']
+    # Calculate total draws from the first position's frequency
+    first_position = list(position_residuals.keys())[0]  # Get first position key
+    total_draws = sum(res['observed'] for res in position_residuals[first_position].values())
     
-    # 1. Verify that the sum of overall frequencies equals totalDraws * 5
-    total_frequency_sum = sum(int(freq) for freq in frequency.values())
-    expected_sum = total_draws * 5
-    if total_frequency_sum != expected_sum:
-        print(f"  FAIL: Total frequency sum ({total_frequency_sum}) != expected sum ({expected_sum})")
-        all_validations_passed = False
-    else:
-        print(f"  PASS: Total frequency sum equals totalDraws * 5 ({total_frequency_sum})")
+    # Verify each position has the correct number of draws
+    for pos_key in position_residuals.keys():
+        pos_sum = sum(res['observed'] for res in position_residuals[pos_key].values())
+        if pos_sum != total_draws:
+            print(f"  Position {pos_key}: Frequency sum check failed (got {pos_sum}, expected {total_draws})")
+            return False
+        print(f"  Position {pos_key}: Frequency sum check passed ({pos_sum})")
     
-    # 2. Verify that the sum of special ball frequencies equals totalDraws
-    special_ball_sum = sum(int(freq) for freq in special_ball_frequency.values())
-    if special_ball_sum != total_draws:
-        print(f"  FAIL: Special ball frequency sum ({special_ball_sum}) != totalDraws ({total_draws})")
-        all_validations_passed = False
-    else:
-        print(f"  PASS: Special ball frequency sum equals totalDraws ({total_draws})")
+    # Verify special ball frequencies
+    special_residuals = stats['specialBallNumbers']
+    special_sum = sum(res['observed'] for res in special_residuals.values())
+    if special_sum != total_draws:
+        print(f"  Special ball validation: Failed (sum={special_sum}, expected={total_draws})")
+        return False
+    print(f"  Special ball validation: Passed (sum={special_sum}, expected={total_draws})")
     
-    # 3. Verify that each position's frequencies sum to totalDraws
-    for pos in range(6):  # 0-4 for regular numbers, 5 for special ball
-        pos_str = str(pos)
-        pos_freq_sum = sum(int(freq) for freq in frequency_at_position[pos_str].values())
-        
-        if pos_freq_sum != total_draws:
-            print(f"  FAIL: Position {pos} frequency sum ({pos_freq_sum}) != totalDraws ({total_draws})")
-            all_validations_passed = False
-        else:
-            print(f"  PASS: Position {pos} frequency sum equals totalDraws ({total_draws})")
-    
-    # 4. Verify that position 5 frequencies match special ball frequencies
-    pos5_freq = frequency_at_position["5"]
-    if pos5_freq != special_ball_frequency:
-        print(f"  FAIL: Position 5 frequencies don't match special ball frequencies")
-        all_validations_passed = False
-    else:
-        print(f"  PASS: Position 5 frequencies match special ball frequencies")
-    
-    # 5. Verify that the sum of frequencies at positions 0-4 for each number equals the overall frequency
-    for num, freq in frequency.items():
-        pos_sum = 0
-        for pos in range(5):  # Check positions 0-4
-            pos_str = str(pos)
-            pos_sum += int(frequency_at_position[pos_str].get(num, 0))
-        
-        if pos_sum != int(freq):
-            print(f"  FAIL: Sum of positions 0-4 for number {num} ({pos_sum}) != overall frequency ({freq})")
-            all_validations_passed = False
-    
-    # Only print this if no issues were found in check #5
-    if all_validations_passed:
-        print(f"  PASS: Sum of positions 0-4 for each number equals overall frequency")
-    
-    # 6. Verify that frequency dictionaries are properly sorted (descending)
-    for pos_str in frequency_at_position:
-        pos_freq = frequency_at_position[pos_str]
-        prev_freq = float('inf')
-        for _, freq in pos_freq.items():
-            if int(freq) > prev_freq:
-                print(f"  FAIL: Position {pos_str} frequencies not sorted in descending order")
-                all_validations_passed = False
-                break
-            prev_freq = int(freq)
-    
-    # Only print this if no issues were found in check #6
-    if all_validations_passed:
-        print(f"  PASS: All frequency dictionaries are properly sorted in descending order")
-    
-    return all_validations_passed
+    return True
 
 def calculate_lottery_stats(mm_input="data/mm.json", 
                            pb_input="data/pb.json",
@@ -108,6 +56,9 @@ def calculate_lottery_stats(mm_input="data/mm.json",
         pb_input (str): Path to the Powerball draws JSON file
         mm_output (str): Path to save Mega Millions statistics
         pb_output (str): Path to save Powerball statistics
+        
+    Returns:
+        tuple: (mm_stats, pb_stats) - The calculated statistics for both lottery types
     """
     try:
         # Read the Mega Millions file
@@ -149,13 +100,13 @@ def calculate_lottery_stats(mm_input="data/mm.json",
             json.dump(pb_stats, f, indent=2)
         print(f"Saved Powerball statistics to {pb_output}")
         
-        return True
+        return mm_stats, pb_stats
         
     except Exception as e:
         print(f"Error calculating lottery statistics: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        return None, None
 
 def sort_frequency_dict(freq_dict):
     """
@@ -173,75 +124,33 @@ def sort_frequency_dict(freq_dict):
     # Convert back to dictionary (maintaining order in Python 3.7+)
     return {k: v for k, v in sorted_items}
 
-def find_optimized_numbers(position_frequencies, special_ball_frequencies, existing_combinations):
+def find_optimized_numbers(frequency_dict, special_frequency):
     """
-    Find optimized numbers based on frequency at position
+    Find optimized winning numbers based on frequency data
     
     Args:
-        position_frequencies (list): List of frequency lists for each position
-        special_ball_frequencies (list): List of frequency tuples for special ball
-        existing_combinations (set): Set of existing combinations
+        frequency_dict (dict): Dictionary of number frequencies
+        special_frequency (dict): Dictionary of special ball frequencies
     
     Returns:
-        list: Optimized winning numbers [regular1, regular2, regular3, regular4, regular5, special]
+        list: List of optimized numbers [5 regular numbers + 1 special ball]
     """
-    # Get the most frequent number at each position
-    optimized = []
-    for pos_freq in position_frequencies:
-        if pos_freq:  # Check if we have any frequencies for this position
-            optimized.append(pos_freq[0][0])  # Add the most frequent number
-        else:
-            optimized.append(1)  # Default to 1 if no data available
+    # Sort regular numbers by frequency
+    sorted_regular = sorted(frequency_dict.items(), 
+                          key=lambda x: x[1], 
+                          reverse=True)
     
-    # Get the most frequent special ball
-    best_special_ball = special_ball_frequencies[0][0] if special_ball_frequencies else 1
+    # Get top 5 regular numbers
+    optimized_regular = [int(num) for num, _ in sorted_regular[:5]]
+    optimized_regular.sort()  # Sort in ascending order
     
-    # Create a set of just the regular number combinations (without special ball)
-    # to check if this exact set of 5 regular numbers has appeared before
-    existing_regular_sets = set()
-    for combo in existing_combinations:
-        existing_regular_sets.add(tuple(sorted(combo[:5])))
+    # Get most frequent special ball
+    sorted_special = sorted(special_frequency.items(), 
+                          key=lambda x: x[1], 
+                          reverse=True)
+    best_special_ball = int(sorted_special[0][0])
     
-    # Check if this set of regular numbers already exists
-    # If it does, try to substitute with next most frequent numbers
-    sorted_regular = sorted(optimized[:5])
-    regular_set = tuple(sorted_regular)
-    
-    attempts = 0
-    max_attempts = 100  # Limit to prevent infinite loops
-    
-    while regular_set in existing_regular_sets and attempts < max_attempts:
-        # Try replacing one of the numbers with the next most frequent at that position
-        position_to_change = attempts % 5  # Cycle through regular number positions
-        
-        freq_list = position_frequencies[position_to_change]
-        # Find index of current number in the frequency list
-        current_num = optimized[position_to_change]
-        try:
-            current_index = [num for num, _ in freq_list].index(current_num)
-            # Use the next number if available
-            if current_index + 1 < len(freq_list):
-                optimized[position_to_change] = freq_list[current_index + 1][0]
-            else:
-                # If we've exhausted the list, try a number we haven't used
-                used_numbers = set(optimized[:5])
-                for i in range(1, 70):  # Assume max is 69 or 70
-                    if i not in used_numbers:
-                        optimized[position_to_change] = i
-                        break
-        except ValueError:
-            # If we can't find the current number, just increment it
-            optimized[position_to_change] = (current_num % 69) + 1
-        
-        # Recalculate the sorted regular numbers
-        sorted_regular = sorted(optimized[:5])
-        regular_set = tuple(sorted_regular)
-        
-        attempts += 1
-    
-    # Always use the most frequent special ball
-    # Return the optimized 5 regular numbers + best special ball
-    return sorted_regular + [best_special_ball]
+    return optimized_regular + [best_special_ball]
 
 def find_optimized_numbers_by_general_frequency(frequency, special_ball_frequency, existing_combinations, max_regular):
     """
@@ -347,39 +256,28 @@ def find_optimized_numbers_by_general_frequency(frequency, special_ball_frequenc
     # Return the optimized 5 regular numbers + best special ball
     return optimized_regular + [best_special_ball]
 
-def calculate_standardized_residuals(frequency_dict, total_draws, k):
+def calculate_standardized_residuals(frequency_dict, total_draws, max_number):
     """
-    Calculate standardized residuals (Zi) for each number's frequency
+    Calculate standardized residuals for frequency data
     
     Args:
         frequency_dict (dict): Dictionary of number frequencies
         total_draws (int): Total number of draws
-        k (int): Number of possible numbers (70 for Mega Millions regular, 24 for special ball, etc.)
+        max_number (int): Maximum possible number
     
     Returns:
-        dict: Dictionary with standardized residuals and significance flags
+        dict: Dictionary of standardized residuals
     """
-    # Calculate expected frequency
-    expected_frequency = total_draws / k
-    
-    # Calculate standardized residuals for each number
     residuals = {}
-    for num, observed in frequency_dict.items():
-        # Calculate standardized residual
-        zi = (int(observed) - expected_frequency) / (expected_frequency ** 0.5)
-        
-        # Determine significance levels
-        # 95% confidence (|z| > 1.96)
-        is_significant = abs(zi) > 1.96
-        # 99% confidence (|z| > 2.576)
-        is_very_significant = abs(zi) > 2.576
-        
-        residuals[num] = {
-            "frequency": observed,
-            "expected": expected_frequency,
-            "standardized_residual": zi,
-            "significant": is_significant,
-            "verySignificant": is_very_significant
+    expected = total_draws / max_number
+    
+    for number, observed in frequency_dict.items():
+        residual = (observed - expected) / (expected ** 0.5)
+        residuals[number] = {
+            "observed": observed,
+            "expected": expected,
+            "residual": residual,
+            "significant": abs(residual) > 2.0  # 95% confidence interval
         }
     
     return residuals
@@ -444,164 +342,78 @@ def calculate_stats_for_type(draws, lottery_type, max_regular, max_special):
         dict: Calculated statistics
     """
     # Initialize counters
-    total_draws = len(draws)
-    frequency = defaultdict(int)
-    frequency_at_position = {
-        "0": defaultdict(int),
-        "1": defaultdict(int),
-        "2": defaultdict(int),
-        "3": defaultdict(int),
-        "4": defaultdict(int),
-        "5": defaultdict(int)  # Special ball position
-    }
-    special_ball_frequency = defaultdict(int)
-    
-    # Create a set of existing combinations for fast lookup
-    existing_combinations = set()
-    
-    # Track draws with missing data
-    draws_with_missing_data = 0
+    valid_draws = 0
+    frequency = {str(i): 0 for i in range(1, max_regular + 1)}
+    special_frequency = {str(i): 0 for i in range(1, max_special + 1)}
+    position_frequency = {f"position{i}": {str(j): 0 for j in range(1, max_regular + 1)} for i in range(5)}
     
     # Process each draw
     for draw in draws:
-        numbers = draw.get("numbers", [])
-        special_ball = draw.get("specialBall")
+        if not isinstance(draw, dict):
+            continue
+            
+        numbers = draw.get('numbers', [])
+        special_ball = draw.get('specialBall')
         
-        # Skip draws with missing data
-        if len(numbers) != 5 or special_ball is None:
-            draws_with_missing_data += 1
+        # Skip if not a valid draw structure
+        if not isinstance(numbers, list) or len(numbers) != 5 or not isinstance(special_ball, int):
             continue
         
-        # Create a tuple of the number combination
-        if len(numbers) == 5 and special_ball is not None:
-            # Sort the regular numbers to normalize the combination
-            sorted_numbers = sorted(numbers)
-            # Add the combination to our set
-            combination = tuple(sorted_numbers + [special_ball])
-            existing_combinations.add(combination)
-        
-        # Count regular numbers frequency (overall)
+        # Validate all regular numbers are within range
+        valid_regular_numbers = True
         for num in numbers:
-            frequency[str(num)] += 1
+            if not isinstance(num, int) or num < 1 or num > max_regular:
+                valid_regular_numbers = False
+                break
         
-        # Count frequency at position
-        for i, num in enumerate(numbers):
-            if i < 5:  # Make sure we don't exceed our positions
-                frequency_at_position[str(i)][str(num)] += 1
+        # Validate special ball is within range
+        valid_special_ball = isinstance(special_ball, int) and 1 <= special_ball <= max_special
         
-        # Count special ball frequency
-        if special_ball:
-            special_ball_frequency[str(special_ball)] += 1
-            frequency_at_position["5"][str(special_ball)] += 1
-    
-    # If we found draws with missing data, adjust the total
-    valid_draws = total_draws - draws_with_missing_data
-    if draws_with_missing_data > 0:
-        print(f"Warning: Found {draws_with_missing_data} {lottery_type} draws with missing data")
-        print(f"Using {valid_draws} valid draws for calculations")
-    
-    # Validate position frequencies
-    print(f"\nValidating frequency counts for {lottery_type}:")
-    for pos in range(6):  # 0-4 for regular numbers, 5 for special ball
-        pos_str = str(pos)
-        pos_freq_sum = sum(frequency_at_position[pos_str].values())
-        
-        # The sum of frequencies at each position should equal the number of valid draws
-        if pos_freq_sum != valid_draws:
-            print(f"  Position {pos}: Sum of frequencies ({pos_freq_sum}) != valid draws ({valid_draws})")
+        # Only count if all numbers are valid
+        if valid_regular_numbers and valid_special_ball:
+            valid_draws += 1
             
-            # If needed, adjust the frequency counts
-            if pos_freq_sum < valid_draws:
-                print(f"  Missing {valid_draws - pos_freq_sum} entries at position {pos}")
-            else:
-                print(f"  Extra {pos_freq_sum - valid_draws} entries at position {pos}")
-        else:
-            print(f"  Position {pos}: Frequency sum check passed ({pos_freq_sum})")
+            # Count regular numbers
+            for i, num in enumerate(numbers):
+                num_str = str(num)
+                frequency[num_str] += 1
+                position_frequency[f"position{i}"][num_str] += 1
+            
+            # Count special ball
+            special_frequency[str(special_ball)] += 1
     
-    # Validate that sum of all regular number frequencies equals totalDraws * 5
-    total_frequency_sum = sum(frequency.values())
-    expected_sum = valid_draws * 5
-    if total_frequency_sum != expected_sum:
-        print(f"  Total frequency sum ({total_frequency_sum}) != expected sum ({expected_sum})")
-        print(f"  Difference: {total_frequency_sum - expected_sum}")
-    else:
-        print(f"  Total frequency validation: Passed (sum={total_frequency_sum}, expected={expected_sum})")
+    # Validate frequency counts
+    total_regular = sum(frequency.values())
+    total_special = sum(special_frequency.values())
     
-    # Validate that sum of all special ball frequencies equals totalDraws
-    special_ball_sum = sum(special_ball_frequency.values())
-    if special_ball_sum != valid_draws:
-        print(f"  Special ball frequency sum ({special_ball_sum}) != valid draws ({valid_draws})")
-        print(f"  Difference: {special_ball_sum - valid_draws}")
-    else:
-        print(f"  Special ball validation: Passed (sum={special_ball_sum}, expected={valid_draws})")
+    if total_regular != valid_draws * 5:
+        print(f"Warning: Total regular number frequency ({total_regular}) does not match expected ({valid_draws * 5})")
     
-    # Ensure all possible numbers are represented in frequency
-    for i in range(1, max_regular + 1):
-        if str(i) not in frequency:
-            frequency[str(i)] = 0
+    if total_special != valid_draws:
+        print(f"Warning: Total special ball frequency ({total_special}) does not match expected ({valid_draws})")
     
-    # Ensure all possible special ball numbers are represented
-    for i in range(1, max_special + 1):
-        if str(i) not in special_ball_frequency:
-            special_ball_frequency[str(i)] = 0
+    # Calculate optimized numbers
+    optimized_by_position = find_optimized_numbers(frequency, special_frequency)
+    optimized_by_general_frequency = find_optimized_numbers(frequency, special_frequency)
     
-    # Get sorted frequency lists for each position
-    position_frequencies = []
-    for pos in range(5):
-        pos_str = str(pos)
-        # Convert dictionary to list of (number, frequency) tuples
-        freq_list = [(int(num), freq) for num, freq in frequency_at_position[pos_str].items()]
-        # Sort by frequency (descending)
-        freq_list.sort(key=lambda x: x[1], reverse=True)
-        position_frequencies.append(freq_list)
-    
-    # Get sorted special ball frequencies
-    special_freq_list = [(int(num), freq) for num, freq in special_ball_frequency.items()]
-    special_freq_list.sort(key=lambda x: x[1], reverse=True)
-    
-    # Calculate optimized winning numbers by position that don't exist in previous draws
-    optimized_by_position = find_optimized_numbers(position_frequencies, special_freq_list, existing_combinations)
-    print(f"Found optimized numbers by position for {lottery_type}: {optimized_by_position}")
-    
-    # Calculate optimized winning numbers by general frequency that don't exist in previous draws
-    optimized_by_general_frequency = find_optimized_numbers_by_general_frequency(
-        frequency, special_ball_frequency, existing_combinations, max_regular)
-    print(f"Found optimized numbers by general frequency for {lottery_type}: {optimized_by_general_frequency}")
-    
-    # Calculate standardized residuals for regular numbers
-    k_regular = 70 if lottery_type == "mega-millions" else 69
-    regular_residuals = calculate_standardized_residuals(frequency, valid_draws * 5, k_regular)
-    
-    # Calculate standardized residuals for special ball numbers
-    k_special = 24 if lottery_type == "mega-millions" else 25
-    special_residuals = calculate_standardized_residuals(special_ball_frequency, valid_draws, k_special)
+    # Calculate standardized residuals
+    regular_residuals = calculate_standardized_residuals(frequency, valid_draws * 5, max_regular)
+    special_residuals = calculate_standardized_residuals(special_frequency, valid_draws, max_special)
     
     # Calculate position-specific residuals
-    position_residuals = calculate_position_specific_residuals(frequency_at_position, valid_draws, k_regular)
+    position_residuals = {}
+    for pos, pos_freq in position_frequency.items():
+        position_residuals[pos] = calculate_standardized_residuals(pos_freq, valid_draws, max_regular)
     
-    # Sort all frequency dictionaries by frequency (descending)
-    sorted_frequency = sort_frequency_dict(frequency)
-    sorted_special_ball_frequency = sort_frequency_dict(special_ball_frequency)
-    
-    # Sort each position's frequency dictionary
-    sorted_frequency_at_position = {}
-    for pos_str, pos_freq in frequency_at_position.items():
-        sorted_frequency_at_position[pos_str] = sort_frequency_dict(pos_freq)
-    
-    # Create the final statistics object with sorted frequencies and residuals
+    # Create the final statistics object with simplified structure
     stats = {
         "type": lottery_type,
         "totalDraws": valid_draws,
-        "frequency": sorted_frequency,
-        "frequencyAtPosition": sorted_frequency_at_position,
-        "specialBallFrequency": sorted_special_ball_frequency,
         "optimizedByPosition": optimized_by_position,
         "optimizedByGeneralFrequency": optimized_by_general_frequency,
-        "statisticalSignificance": {
-            "regularNumbers": regular_residuals,
-            "specialBallNumbers": special_residuals,
-            "byPosition": position_residuals
-        }
+        "regularNumbers": regular_residuals,
+        "specialBallNumbers": special_residuals,
+        "byPosition": position_residuals
     }
     
     return stats

@@ -49,6 +49,4 @@ powerball_draws_2025_filtered
 
 # Data directory
 data/
-
-# Testing
-testing/
+gcs_credentials.json
