@@ -368,17 +368,67 @@ def calculate_standardized_residuals(frequency_dict, total_draws, k):
         # Calculate standardized residual
         zi = (int(observed) - expected_frequency) / (expected_frequency ** 0.5)
         
-        # Determine if significant (outside [-2, 2] range)
-        is_significant = abs(zi) > 2
+        # Determine significance levels
+        # 95% confidence (|z| > 1.96)
+        is_significant = abs(zi) > 1.96
+        # 99% confidence (|z| > 2.576)
+        is_very_significant = abs(zi) > 2.576
         
         residuals[num] = {
             "frequency": observed,
             "expected": expected_frequency,
             "standardized_residual": zi,
-            "significant": is_significant
+            "significant": is_significant,
+            "verySignificant": is_very_significant
         }
     
     return residuals
+
+def calculate_position_specific_residuals(frequency_at_position, total_draws, k):
+    """
+    Calculate standardized residuals for each position, taking into account the valid range of numbers
+    
+    Args:
+        frequency_at_position (dict): Dictionary of position -> number frequencies
+        total_draws (int): Total number of draws
+        k (int): Number of possible numbers (70 for Mega Millions, 69 for Powerball)
+    
+    Returns:
+        dict: Dictionary with standardized residuals and significance flags for each position
+    """
+    # Each position has k-4 possible numbers
+    possible_numbers_per_position = k - 4
+    expected_frequency = total_draws / possible_numbers_per_position
+    
+    position_residuals = {}
+    
+    # Calculate residuals for each position (0-4 for regular numbers)
+    for pos in range(5):
+        pos_str = str(pos)
+        pos_freq = frequency_at_position[pos_str]
+        
+        residuals = {}
+        for num, observed in pos_freq.items():
+            # Calculate standardized residual
+            zi = (int(observed) - expected_frequency) / (expected_frequency ** 0.5)
+            
+            # Determine significance levels
+            # 95% confidence (|z| > 1.96)
+            is_significant = abs(zi) > 1.96
+            # 99% confidence (|z| > 2.576)
+            is_very_significant = abs(zi) > 2.576
+            
+            residuals[num] = {
+                "frequency": observed,
+                "expected": expected_frequency,
+                "standardized_residual": zi,
+                "significant": is_significant,
+                "verySignificant": is_very_significant
+            }
+        
+        position_residuals[pos_str] = residuals
+    
+    return position_residuals
 
 def calculate_stats_for_type(draws, lottery_type, max_regular, max_special):
     """
@@ -526,6 +576,9 @@ def calculate_stats_for_type(draws, lottery_type, max_regular, max_special):
     k_special = 24 if lottery_type == "mega-millions" else 25
     special_residuals = calculate_standardized_residuals(special_ball_frequency, valid_draws, k_special)
     
+    # Calculate position-specific residuals
+    position_residuals = calculate_position_specific_residuals(frequency_at_position, valid_draws, k_regular)
+    
     # Sort all frequency dictionaries by frequency (descending)
     sorted_frequency = sort_frequency_dict(frequency)
     sorted_special_ball_frequency = sort_frequency_dict(special_ball_frequency)
@@ -546,7 +599,8 @@ def calculate_stats_for_type(draws, lottery_type, max_regular, max_special):
         "optimizedByGeneralFrequency": optimized_by_general_frequency,
         "statisticalSignificance": {
             "regularNumbers": regular_residuals,
-            "specialBallNumbers": special_residuals
+            "specialBallNumbers": special_residuals,
+            "byPosition": position_residuals
         }
     }
     
