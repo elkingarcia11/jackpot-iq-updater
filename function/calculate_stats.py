@@ -347,6 +347,39 @@ def find_optimized_numbers_by_general_frequency(frequency, special_ball_frequenc
     # Return the optimized 5 regular numbers + best special ball
     return optimized_regular + [best_special_ball]
 
+def calculate_standardized_residuals(frequency_dict, total_draws, k):
+    """
+    Calculate standardized residuals (Zi) for each number's frequency
+    
+    Args:
+        frequency_dict (dict): Dictionary of number frequencies
+        total_draws (int): Total number of draws
+        k (int): Number of possible numbers (70 for Mega Millions regular, 24 for special ball, etc.)
+    
+    Returns:
+        dict: Dictionary with standardized residuals and significance flags
+    """
+    # Calculate expected frequency
+    expected_frequency = total_draws / k
+    
+    # Calculate standardized residuals for each number
+    residuals = {}
+    for num, observed in frequency_dict.items():
+        # Calculate standardized residual
+        zi = (int(observed) - expected_frequency) / (expected_frequency ** 0.5)
+        
+        # Determine if significant (outside [-2, 2] range)
+        is_significant = abs(zi) > 2
+        
+        residuals[num] = {
+            "frequency": observed,
+            "expected": expected_frequency,
+            "standardized_residual": zi,
+            "significant": is_significant
+        }
+    
+    return residuals
+
 def calculate_stats_for_type(draws, lottery_type, max_regular, max_special):
     """
     Calculate statistics for a specific lottery type
@@ -485,6 +518,14 @@ def calculate_stats_for_type(draws, lottery_type, max_regular, max_special):
         frequency, special_ball_frequency, existing_combinations, max_regular)
     print(f"Found optimized numbers by general frequency for {lottery_type}: {optimized_by_general_frequency}")
     
+    # Calculate standardized residuals for regular numbers
+    k_regular = 70 if lottery_type == "mega-millions" else 69
+    regular_residuals = calculate_standardized_residuals(frequency, valid_draws * 5, k_regular)
+    
+    # Calculate standardized residuals for special ball numbers
+    k_special = 24 if lottery_type == "mega-millions" else 25
+    special_residuals = calculate_standardized_residuals(special_ball_frequency, valid_draws, k_special)
+    
     # Sort all frequency dictionaries by frequency (descending)
     sorted_frequency = sort_frequency_dict(frequency)
     sorted_special_ball_frequency = sort_frequency_dict(special_ball_frequency)
@@ -494,7 +535,7 @@ def calculate_stats_for_type(draws, lottery_type, max_regular, max_special):
     for pos_str, pos_freq in frequency_at_position.items():
         sorted_frequency_at_position[pos_str] = sort_frequency_dict(pos_freq)
     
-    # Create the final statistics object with sorted frequencies
+    # Create the final statistics object with sorted frequencies and residuals
     stats = {
         "type": lottery_type,
         "totalDraws": valid_draws,
@@ -502,7 +543,11 @@ def calculate_stats_for_type(draws, lottery_type, max_regular, max_special):
         "frequencyAtPosition": sorted_frequency_at_position,
         "specialBallFrequency": sorted_special_ball_frequency,
         "optimizedByPosition": optimized_by_position,
-        "optimizedByGeneralFrequency": optimized_by_general_frequency
+        "optimizedByGeneralFrequency": optimized_by_general_frequency,
+        "statisticalSignificance": {
+            "regularNumbers": regular_residuals,
+            "specialBallNumbers": special_residuals
+        }
     }
     
     return stats
